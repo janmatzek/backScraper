@@ -7,10 +7,13 @@ Module to retrieve item prices data from a heureka.cz, a comparison site.
 # TODO: implement logging (loguru?)
 
 import json
+import logging
 import os
 import re
+import time
 from datetime import datetime
 
+import pandas as pd
 import pandas_gbq
 import requests
 from bs4 import BeautifulSoup
@@ -19,6 +22,7 @@ from google.oauth2 import service_account
 
 from utils import return_list_of_products, return_table_schema, send_response
 
+# set env variables
 load_dotenv()
 
 BQ_PROJECT = os.getenv("BQ_PROJECT_ID")
@@ -29,15 +33,23 @@ SERVICE_ACCOUNT_PATH = os.getenv("SERVICE_ACCOUNT_PATH")
 PRODUCTS = return_list_of_products()
 SCHEMA = return_table_schema()
 
+# start logs
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
 
 def handler(event, context):
     """
     Scrapes backpack prices from heureka and stores them in the DB.
     """
+    start_time = time.time()
+
     event_body = event.get("body", {}) if "body" in event else {}
     print("Received event:", json.dumps(event_body))
 
     print(f"Running {context.function_name}")
+
+    # set up a dataframe for the result data
     products_data = pd.DataFrame()
 
     # this could be async and run faster
@@ -113,4 +125,9 @@ def handler(event, context):
     except Exception as e:  # pylint: disable=broad-except
         return send_response(500, "Failed to upload the data to BigQuery.", e)
 
-    return send_response(200, f"Retrieved prices of {len(products_data)} products!")
+    end_time = time.time()
+
+    return send_response(
+        200,
+        f"Retrieved prices of {len(products_data)} products in {round(end_time-start_time, 2)} seconds!",
+    )
