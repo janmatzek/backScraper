@@ -52,6 +52,8 @@ def handler(event, context):
     # set up a dataframe for the result data
     products_data = pd.DataFrame()
 
+    current_timestamp = datetime.now()
+
     # this could be async and run faster
     for product in PRODUCTS:
 
@@ -64,8 +66,6 @@ def handler(event, context):
         data = []
 
         products = products_list.find_all("section", class_="c-offer")
-
-        current_timestamp = datetime.now()
 
         for section in products:
 
@@ -86,7 +86,7 @@ def handler(event, context):
 
             data.append(
                 {
-                    "date": current_timestamp,
+                    "date_extracted": current_timestamp,
                     "product_id": product["product_id"],
                     "product_name": product["name"],
                     "color": product["color"],

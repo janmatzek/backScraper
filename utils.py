@@ -9,7 +9,7 @@ import requests
 def return_table_schema():
     """Returns table schema."""
     return [
-        {"name": "date", "type": "TIMESTAMP"},
+        {"name": "date_extracted", "type": "TIMESTAMP"},
         {"name": "product_id", "type": "INTEGER"},
         {"name": "product_name", "type": "STRING"},
         {"name": "color", "type": "STRING"},
