@@ -16,11 +16,13 @@ var/
 .installed.cfg
 *.egg
 venv/
+.venv/
 __pycache__/
 
 # Secrets
 backpack_runner.json
 .env
+create_aws_key.sh
 
 
 # Serverless directories
