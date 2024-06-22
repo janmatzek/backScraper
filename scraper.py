@@ -6,29 +6,31 @@ Module to retrieve item prices data from a heureka.cz, a comparison site.
 # TODO: async
 # TODO: implement logging
 
+import base64
 import json
 import logging
 import os
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
-import pandas as pd
-import pandas_gbq
+# import pandas as pd
+# import pandas_gbq
+import boto3
 import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
+from google.auth.transport.requests import Request
+from google.cloud import bigquery
 from google.oauth2 import service_account
 
 from utils import return_list_of_products, return_table_schema, send_response
 
 # set env variables
 load_dotenv()
-
 BQ_PROJECT = os.getenv("BQ_PROJECT_ID")
 DESTINATION_DATASET = os.getenv("BQ_DATASET")
 DESTINATION_TABLE = os.getenv("BQ_L0_TABLE_NAME")
-SERVICE_ACCOUNT_PATH = os.getenv("SERVICE_ACCOUNT_PATH")
 
 PRODUCTS = return_list_of_products()
 SCHEMA = return_table_schema()
@@ -42,22 +44,43 @@ def handler(event, context):
     """
     Scrapes backpack prices from heureka and stores them in the DB.
     """
-    # try:
-    #     import unzip_requirements
-    # except ImportError:
-    #     pass
 
     start_time = time.time()
+
+    # Initialize KMS client
+    kms_client = boto3.client("kms")
+
+    # Get the encrypted key from environment variables
+    encrypted_key = base64.b64decode(os.environ["GOOGLE_ENCRYPTED_KEY"])
+
+    # Decrypt the key
+    decrypted_key = kms_client.decrypt(CiphertextBlob=encrypted_key)["Plaintext"]
+
+    # Load the key as JSON
+    service_account_info = json.loads(decrypted_key)
+
+    client = bigquery.Client(
+        project=BQ_PROJECT,
+        credentials=service_account.Credentials.from_service_account_info(service_account_info),
+    )
+    credentials = service_account.Credentials.from_service_account_info(
+        info=service_account_info, scopes=["https://www.googleapis.com/auth/cloud-platform"]
+    )
+
+    credentials.refresh(Request())
+
+    access_token = credentials.token
+
+    table_ref = client.dataset(f"{DESTINATION_DATASET}").table(DESTINATION_TABLE)
 
     event_body = event.get("body", {}) if "body" in event else {}
     logger.info("Received event:  %s", json.dumps(event_body))
 
     logger.info("Running %s", context.function_name)
 
-    # set up a dataframe for the result data
-    products_data = pd.DataFrame()
-
-    current_timestamp = datetime.now()
+    # set up a list for the result data
+    products_data = []
+    current_timestamp = datetime.now(timezone.utc)
 
     # this could be async and run faster
     for product in PRODUCTS:
@@ -67,8 +90,6 @@ def handler(event, context):
 
         # fetch last div to bypass "doporučené nabídky"
         products_list = parsed_html.find_all("div", class_="c-offers-list__cont")[-1]
-
-        data = []
 
         products = products_list.find_all("section", class_="c-offer")
 
@@ -89,44 +110,45 @@ def handler(event, context):
             else:
                 price = None
 
-            data.append(
+            products_data.append(
                 {
-                    "date_extracted": current_timestamp,
+                    "date_extracted": str(current_timestamp),
                     "product_id": product["product_id"],
                     "product_name": product["name"],
                     "color": product["color"],
-                    "shop_name": img_alt,
-                    "price": price,
+                    "shop_name": str(img_alt),
+                    "price": float(price),
                 }
             )
 
-        df_data = pd.DataFrame.from_records(data)
+    bq_schema = [
+        bigquery.SchemaField("date_extracted", "TIMESTAMP"),
+        bigquery.SchemaField("product_id", "INTEGER"),
+        bigquery.SchemaField("product_name", "STRING"),
+        bigquery.SchemaField("color", "STRING"),
+        bigquery.SchemaField("shop_name", "STRING"),
+        bigquery.SchemaField("price", "FLOAT"),
+    ]
 
-        products_data = pd.concat(objs=[products_data, df_data], axis=0)
+    table_id = f"{BQ_PROJECT}.{DESTINATION_DATASET}.{DESTINATION_TABLE}"
+    url = f"https://bigquery.googleapis.com/bigquery/v2/projects/{BQ_PROJECT}/datasets/{DESTINATION_DATASET}/tables/{DESTINATION_TABLE}/insertAll"
 
-    # validate data types
-    for col in SCHEMA:
-        if col["type"] == "STRING":
-            products_data[col["name"]] = products_data[col["name"]].astype(str)
-        elif col["type"] == "FLOAT":
-            products_data[col["name"]] = pd.to_numeric(products_data[col["name"]], errors="coerce")
-        elif col["type"] == "INTEGER":
-            products_data[col["name"]] = pd.to_numeric(
-                products_data[col["name"]], errors="coerce", downcast="integer"
-            )
-        elif col["type"] == "TIMESTAMP":
-            products_data[col["name"]] = pd.to_datetime(products_data[col["name"]], errors="coerce")
+    headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+    body = {"rows": [{"json": row} for row in products_data]}
 
-    # send the data to BigQuery
+    # Make the API request
+    response = requests.post(url, headers=headers, data=json.dumps(body), timeout=10)
+    print(response)
     try:
-        pandas_gbq.to_gbq(
-            dataframe=products_data,
-            project_id=BQ_PROJECT,
-            destination_table=f"{DESTINATION_DATASET}.{DESTINATION_TABLE}",
-            if_exists="append",
-            table_schema=SCHEMA,
-            credentials=service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_PATH),
+        # opens an async stream to bq, data shold show up eventualy
+        job_result = client.insert_rows(
+            table=table_ref, rows=products_data, selected_fields=bq_schema
         )
+
+        client.insert_rows_json(table=table_ref, json_rows=products_data)
+        logger.info("stream initiated")
+        # print(f"Insertion job result: {job_result}")
+
     except Exception as e:  # pylint: disable=broad-except
         return send_response(500, "Failed to upload the data to BigQuery.", e)
 
@@ -138,7 +160,10 @@ def handler(event, context):
         round(end_time - start_time, 2),
     )
 
-    return send_response(
-        200,
-        f"Retrieved prices of {len(products_data)} products in {round(end_time-start_time, 2)} seconds!",
-    )
+    try:
+        return send_response(
+            200,
+            "Data is being uploaded",
+        )
+    except Exception as e:
+        logger.error(e)

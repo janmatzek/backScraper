@@ -22,6 +22,8 @@ __pycache__/
 # Secrets
 backpack_runner.json
 .env
+create_aws_key.sh
+serverless.yml
 
 
 # Serverless directories

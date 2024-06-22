@@ -17,7 +17,6 @@ functions:
   backpackScraper:
     handler: scraper.handler
     layers:
-      # - arn:aws:lambda:us-east-1:730335547446:layer:python-pandas-layer
       - Ref: PythonRequirementsLambdaLayer
     events:
       - http:
@@ -35,7 +34,7 @@ plugins:
 custom:
   prune:
     automatic: true
-    number: 1
+    number: 2
   serverless-offline:
     noTimeout: true
   pythonRequirements:
@@ -66,3 +65,4 @@ package:
     - "!**/*.csv"
     - "!.vscode/**"
     - "!readme.MD"
+    - "!create_aws_key.sh"

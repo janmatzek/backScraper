@@ -117,5 +117,9 @@ def send_response(status_code: int, message: str, e=""):
 
     send_telegram_message(message=message, is_alert=send_as_alert)
 
-    response = {"status_code": status_code, "body": json.dumps({"message": f"{message}"})}
+    response = {
+        "status_code": status_code,
+        "headers": {"Content-Type": "application/json"},
+        "body": json.dumps({"message": f"{message}"}),
+    }
     return response
