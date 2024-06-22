@@ -1,4 +1,4 @@
-service: mySpotifyData
+service: myBackpacks
 
 frameworkVersion: "3"
 
@@ -17,6 +17,7 @@ functions:
   backpackScraper:
     handler: scraper.handler
     layers:
+      # - arn:aws:lambda:us-east-1:730335547446:layer:python-pandas-layer
       - Ref: PythonRequirementsLambdaLayer
     events:
       - http:
@@ -34,7 +35,7 @@ plugins:
 custom:
   prune:
     automatic: true
-    number: 2
+    number: 1
   serverless-offline:
     noTimeout: true
   pythonRequirements:
@@ -49,25 +50,19 @@ package:
     - "!__pycache__/**"
     - "!.vscode/**"
     - "!venv/**"
+    - "!.venv/**"
     - "!.gitignore"
     - "!requirements.txt"
     - "!.git/**"
     - "!.gitignore"
     - "!.gitmodules"
     - "!__pycache__/**"
-    - "!.venv/**"
     - "!serverless/**"
     - "!.serverless_plugins/**"
     - "!.DS_Store"
     - "!.env"
+    - "!backpack_runner.json"
     - "!requirements"
     - "!**/*.csv"
     - "!.vscode/**"
     - "!readme.MD"
-    - "!spotifyAuthorizationCode/**"
-    - "!accessTokenCurl.txt"
-    - "!dropTable.bqsql"
-    - "!.ipynb.checkpoints/**"
-    - "!ipynb_checkpoints/**"
-    - "!spotify/__pycache__"
-    - "!spotify/dropTable.bqsql"

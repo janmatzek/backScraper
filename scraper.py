@@ -4,7 +4,7 @@ Module to retrieve item prices data from a heureka.cz, a comparison site.
 
 # TODO: exceptions
 # TODO: async
-# TODO: implement logging (loguru?)
+# TODO: implement logging
 
 import json
 import logging
@@ -42,12 +42,17 @@ def handler(event, context):
     """
     Scrapes backpack prices from heureka and stores them in the DB.
     """
+    # try:
+    #     import unzip_requirements
+    # except ImportError:
+    #     pass
+
     start_time = time.time()
 
     event_body = event.get("body", {}) if "body" in event else {}
-    print("Received event:", json.dumps(event_body))
+    logger.info("Received event:  %s", json.dumps(event_body))
 
-    print(f"Running {context.function_name}")
+    logger.info("Running %s", context.function_name)
 
     # set up a dataframe for the result data
     products_data = pd.DataFrame()
@@ -126,6 +131,12 @@ def handler(event, context):
         return send_response(500, "Failed to upload the data to BigQuery.", e)
 
     end_time = time.time()
+
+    logger.info(
+        "Retrieved prices of %s products in %s seconds!",
+        len(products_data),
+        round(end_time - start_time, 2),
+    )
 
     return send_response(
         200,
