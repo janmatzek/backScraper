@@ -23,7 +23,7 @@ __pycache__/
 backpack_runner.json
 .env
 create_aws_key.sh
-
+serverless.yml
 
 # Serverless directories
 .serverless

@@ -49,6 +49,7 @@ package:
     - "!__pycache__/**"
     - "!.vscode/**"
     - "!venv/**"
+    - "!.venv/**"
     - "!.gitignore"
     - "!requirements.txt"
     - "!.git/**"
